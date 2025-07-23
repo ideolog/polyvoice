@@ -24,12 +24,24 @@ PolyVoice — это как креативная редакция из сотн�
 - **AI**: OpenAI GPT (позже multi-provider)
 - **Интеграции**: Telegram API (первый канал)
 
+## 🏗 Архитектура
+
+```mermaid
+flowchart LR
+    A["User / Dashboard"] -->|"Creates Project & Sets Style"| B["PolyVoice API"]
+    B -->|"Generate Variants"| C["AI Engine (OpenAI / Claude)"]
+    B -->|"Stores Data"| D["(PostgreSQL)"]
+    B -->|"Queue Tasks"| E["Celery + Redis"]
+    E -->|"Publish"| F["Channels: Telegram, X, LinkedIn"]
+```
+
 ## 🔜 Roadmap
 - [ ] API для генерации постов
 - [ ] Telegram интеграция
 - [ ] Планировщик публикаций
 - [ ] Webhooks + SDK
 - [ ] Мультиязычная генерация контента
+
 
 ---
 
@@ -40,3 +52,4 @@ cd polyvoice
 pip install -r requirements.txt
 python manage.py migrate
 python manage.py runserver
+```
