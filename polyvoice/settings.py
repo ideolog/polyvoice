@@ -28,6 +28,13 @@ DEBUG = True
 ALLOWED_HOSTS = []
 
 
+# telegram
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+
 # Application definition
 
 INSTALLED_APPS = [
