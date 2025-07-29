@@ -19,7 +19,7 @@ class ChannelAdmin(admin.ModelAdmin):
 
 @admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
-    list_display = ('id', 'project', 'channel', 'status', 'scheduled_time', 'published_at', 'created_at')
-    search_fields = ('content', 'project__name')
-    list_filter = ('status', 'created_at')
     ordering = ('-created_at',)
+    list_display = ('id', 'project', 'status', 'created_at')
+    search_fields = ('project__name', 'content')
+    list_filter = ('status', 'created_at')
