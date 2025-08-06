@@ -1,23 +1,49 @@
 .
 ├── README.md
+├── celery_app.py
 ├── core
 │   ├── __init__.py
 │   ├── admin.py
 │   ├── apps.py
+│   ├── migrations
+│   │   ├── 0001_initial.py
+│   │   ├── 0002_channel_post.py
+│   │   ├── 0003_channel_external_id.py
+│   │   ├── 0004_remove_post_channel_remove_post_published_at_and_more.py
+│   │   ├── 0005_post_ai_generated_post_ai_model.py
+│   │   └── __init__.py
 │   ├── models
+│   │   ├── __init__.py
+│   │   ├── channel.py
+│   │   ├── post.py
+│   │   └── project.py
 │   ├── serializers
+│   │   ├── __init__.py
+│   │   ├── channel.py
+│   │   ├── post.py
+│   │   └── project.py
 │   ├── services
 │   ├── tests.py
 │   ├── views
+│   │   ├── __init__.py
+│   │   ├── channel.py
+│   │   ├── post.py
+│   │   └── project.py
 │   └── views.py
 ├── integrations
 │   ├── __init__.py
 │   ├── admin.py
 │   ├── apps.py
+│   ├── migrations
+│   │   └── __init__.py
 │   ├── models.py
 │   ├── telegram
-│   ├── tests.py
-│   └── views.py
+│   │   ├── serializers.py
+│   │   ├── service.py
+│   │   ├── tasks.py
+│   │   ├── urls.py
+│   │   └── views.py
+│   └── tests.py
 ├── manage.py
 ├── polyvoice
 │   ├── __init__.py
@@ -32,8 +58,12 @@
     ├── admin.py
     ├── apps.py
     ├── managers.py
+    ├── migrations
+    │   ├── 0001_initial.py
+    │   ├── 0002_alter_user_managers.py
+    │   └── __init__.py
     ├── models.py
     ├── tests.py
     └── views.py
 
-10 directories, 27 files
+13 directories, 54 files
