@@ -23,6 +23,8 @@ class Post(models.Model):
     content = models.TextField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT)
     created_at = models.DateTimeField(auto_now_add=True)
+    ai_generated = models.BooleanField(default=False)
+    ai_model = models.CharField(max_length=100, blank=True, null=True)
 
     def __str__(self):
         return f"Post ({self.status}) for {self.project.name}"
