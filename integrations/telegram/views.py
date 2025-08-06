@@ -6,10 +6,10 @@ from .serializers import TelegramSendMessageSerializer
 from .service import send_message
 
 class TelegramSendMessageView(APIView):
-    def post(self, request):
+    async def post(self, request):
         serializer = TelegramSendMessageSerializer(data=request.data)
         if serializer.is_valid():
-            send_message(
+            await send_message(
                 chat_id=serializer.validated_data["chat_id"],
                 text=serializer.validated_data["text"]
             )

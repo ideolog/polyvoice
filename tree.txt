@@ -1,0 +1,39 @@
+.
+├── README.md
+├── core
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── models
+│   ├── serializers
+│   ├── services
+│   ├── tests.py
+│   ├── views
+│   └── views.py
+├── integrations
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── models.py
+│   ├── telegram
+│   ├── tests.py
+│   └── views.py
+├── manage.py
+├── polyvoice
+│   ├── __init__.py
+│   ├── asgi.py
+│   ├── settings.py
+│   ├── urls.py
+│   └── wsgi.py
+├── requirements.txt
+├── tree.txt
+└── users
+    ├── __init__.py
+    ├── admin.py
+    ├── apps.py
+    ├── managers.py
+    ├── models.py
+    ├── tests.py
+    └── views.py
+
+10 directories, 27 files

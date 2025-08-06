@@ -28,7 +28,6 @@ staticfiles/
 
 # PyCharm
 *.iml
-.idea/
 *.ipr
 *.iws
 
