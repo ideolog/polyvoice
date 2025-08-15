@@ -27,7 +27,7 @@ class Post(models.Model):
     ai_model = models.CharField(max_length=100, blank=True, null=True)
 
     def __str__(self):
-        return f"Post ({self.status}) for {self.project.name}"
+        return f"Post ({self.id})"
 
 
 class PostSchedule(models.Model):

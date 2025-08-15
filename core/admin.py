@@ -1,7 +1,6 @@
 from django.contrib import admin
 
-
-from .models import Project, Channel, Post
+from .models import Project, Channel, Post, PostSchedule
 
 @admin.register(Project)
 class ProjectAdmin(admin.ModelAdmin):
@@ -23,3 +22,10 @@ class PostAdmin(admin.ModelAdmin):
     list_display = ('id', 'project', 'status', 'created_at')
     search_fields = ('project__name', 'content')
     list_filter = ('status', 'created_at')
+
+@admin.register(PostSchedule)
+class PostScheduleAdmin(admin.ModelAdmin):
+    list_display = ('id', 'post', 'channel', 'scheduled_time', 'published_at')
+    search_fields = ('post__content', 'channel__name')
+    list_filter = ('scheduled_time', 'published_at')
+    ordering = ('-scheduled_time',)
