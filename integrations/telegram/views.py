@@ -60,15 +60,21 @@ class TelegramLoginVerifyView(APIView):
         identity, created = ExternalIdentity.objects.get_or_create(
             provider="telegram",
             external_id=tg_id,
-            defaults={"raw": params},
+            defaults={
+                "raw": params,
+                "user": UserModel.objects.create_user(
+                    username=f"tg_{tg_id}",
+                    password=UserModel.objects.make_random_password(),
+                ),
+            },
         )
-        if created:
-            # если ExternalIdentity новая — создаём пользователя и связываем его
-            user = UserModel.objects.create_user(
-                username=f"tg_{tg_id}",
-                password=UserModel.objects.make_random_password(),
-            )
-            identity.user = user
+
+        if not created:
+            # обновляем данные, если юзер уже был
+            identity.username = username or identity.username
+            identity.photo_url = photo_url or identity.photo_url
+            identity.raw = params
+            identity.save()
 
         # обновляем данные о пользователе Telegram
         identity.username = username or identity.username
