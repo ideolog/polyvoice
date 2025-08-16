@@ -27,12 +27,12 @@ class TelegramSendMessageView(APIView):
 
 class TelegramLoginVerifyView(APIView):
     """
-    Принимает JSON: {"search": "?id=...&first_name=...&hash=..."} или можно прислать чистую строку без "?"
+    Принимает JSON: {"search": "?id=...&first_name=...&hash=..."}
     Возвращает {ok: true, user: {...}} при успехе
     """
     authentication_classes = []  # логин публичный
     permission_classes = []
-    throttle_classes = []  # <-- отключаем лимиты для логина
+    throttle_classes = []  # отключаем лимиты для логина
 
     def post(self, request):
         search = request.data.get("search", "")
@@ -48,52 +48,48 @@ class TelegramLoginVerifyView(APIView):
         if not validate_login_widget(params, bot_token):
             return Response({"ok": False, "error": "invalid signature"}, status=status.HTTP_401_UNAUTHORIZED)
 
-        # --- связываем с ExternalIdentity ---
         from users.models.identities import ExternalIdentity
+        UserModel = get_user_model()
 
         tg_id = str(params.get("id", ""))
         username = params.get("username")
         photo_url = params.get("photo_url")
-        UserModel = get_user_model()
 
-        # создаём или находим существующую ExternalIdentity
-        identity, created = ExternalIdentity.objects.get_or_create(
-            provider="telegram",
-            external_id=tg_id,
-            defaults={
-                "raw": params,
-                "user": UserModel.objects.create_user(
-                    username=f"tg_{tg_id}",
-                    password=UserModel.objects.make_random_password(),
-                ),
-            },
-        )
+        # пробуем найти существующую запись по tg_id
+        try:
+            identity = ExternalIdentity.objects.get(provider="telegram", external_id=tg_id)
+            created = False
+        except ExternalIdentity.DoesNotExist:
+            # создаём пользователя и identity
+            user = UserModel.objects.create_user(
+                username=f"tg_{tg_id}",
+                password=UserModel.objects.make_random_password(),
+                email=None,
+            )
+            identity = ExternalIdentity.objects.create(
+                provider="telegram",
+                external_id=tg_id,
+                user=user,
+                raw=params,
+            )
+            created = True
 
-        if not created:
-            # обновляем данные, если юзер уже был
-            identity.username = username or identity.username
-            identity.photo_url = photo_url or identity.photo_url
-            identity.raw = params
-            identity.save()
-
-        # обновляем данные о пользователе Telegram
+        # обновляем метаданные (даже если запись старая)
         identity.username = username or identity.username
         identity.photo_url = photo_url or identity.photo_url
         identity.raw = params
         identity.save()
 
-        # ставим задачу на скачивание аватара, если фото есть
+        # ставим задачу на скачивание аватарки
         if photo_url:
             download_telegram_avatar_task.delay(identity.id)
 
-        # получаем api_key, если он уже был присвоен
         api_key = getattr(identity.user, "api_key", None)
-        # формируем безопасные поля для фронта (без hash)
         safe_user = {k: v for k, v in params.items() if k != "hash"}
-        # путь к локальному аватару, если он уже скачан
         avatar_url = request.build_absolute_uri(identity.avatar.url) if identity.avatar else None
 
         return Response(
             {"ok": True, "user": safe_user, "api_key": api_key, "avatar": avatar_url},
             status=status.HTTP_200_OK,
         )
+
