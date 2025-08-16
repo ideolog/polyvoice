@@ -4,6 +4,7 @@ from rest_framework import permissions
 
 class MeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = []  # <— отключаем троттл для /api/me/
 
     def get(self, request):
         u = request.user
@@ -13,5 +14,6 @@ class MeView(APIView):
             "email": u.email,
             "api_key_present": bool(getattr(u, "api_key", "")),
             "plan": plan.name if plan else None,
+            "photo_url": getattr(u, "photo_url", None),
         })
 
