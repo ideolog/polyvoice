@@ -81,7 +81,7 @@ class TelegramLoginVerifyView(APIView):
         identity.save()
 
         # ставим задачу на скачивание аватарки
-        if photo_url:
+        if photo_url and not identity.avatar:
             download_telegram_avatar_task.delay(identity.id)
 
         api_key = getattr(identity.user, "api_key", None)
