@@ -5,6 +5,7 @@ from users.models.identities import ExternalIdentity
 
 class MeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = []
 
     def get(self, request):
         u = request.user

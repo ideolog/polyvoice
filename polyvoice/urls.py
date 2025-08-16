@@ -3,6 +3,8 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from core.views import ProjectViewSet, ChannelViewSet, PostViewSet, PostScheduleViewSet
 from users.views import MeView
+from django.conf import settings
+from django.conf.urls.static import static
 
 router = DefaultRouter()
 router.register(r'projects', ProjectViewSet, basename='project')
@@ -15,4 +17,4 @@ urlpatterns = [
     path('api/', include(router.urls)),
     path("api/telegram/", include("integrations.telegram.urls")),
     path("api/me/", MeView.as_view()),  # ← новый
-]
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
