@@ -9,6 +9,7 @@ class ExternalIdentity(models.Model):
     external_id = models.CharField(max_length=255)  # stable TG user ID as string
     username = models.CharField(max_length=255, blank=True, null=True)
     photo_url = models.URLField(blank=True, null=True)
+    avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
     raw = models.JSONField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

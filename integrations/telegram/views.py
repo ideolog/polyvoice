@@ -1,11 +1,12 @@
 from .serializers import TelegramSendMessageSerializer
-from .tasks import send_telegram_message_task
+from .tasks import send_telegram_message_task, download_telegram_avatar_task
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.throttling import SimpleRateThrottle
 from urllib.parse import parse_qsl
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -51,13 +52,42 @@ class TelegramLoginVerifyView(APIView):
         from users.models.identities import ExternalIdentity
 
         tg_id = str(params.get("id", ""))
-        api_key = None
-        try:
-            ei = ExternalIdentity.objects.select_related("user").get(provider="telegram", external_id=tg_id)
-            api_key = getattr(ei.user, "api_key", None)
-        except ExternalIdentity.DoesNotExist:
-            pass
+        username = params.get("username")
+        photo_url = params.get("photo_url")
+        UserModel = get_user_model()
 
-        # успех — вернём безопасные поля (без hash)
-        user = {k: v for k, v in params.items() if k != "hash"}
-        return Response({"ok": True, "user": user, "api_key": api_key}, status=status.HTTP_200_OK)
+        # создаём или находим существующую ExternalIdentity
+        identity, created = ExternalIdentity.objects.get_or_create(
+            provider="telegram",
+            external_id=tg_id,
+            defaults={"raw": params},
+        )
+        if created:
+            # если ExternalIdentity новая — создаём пользователя и связываем его
+            user = UserModel.objects.create_user(
+                username=f"tg_{tg_id}",
+                password=UserModel.objects.make_random_password(),
+            )
+            identity.user = user
+
+        # обновляем данные о пользователе Telegram
+        identity.username = username or identity.username
+        identity.photo_url = photo_url or identity.photo_url
+        identity.raw = params
+        identity.save()
+
+        # ставим задачу на скачивание аватара, если фото есть
+        if photo_url:
+            download_telegram_avatar_task.delay(identity.id)
+
+        # получаем api_key, если он уже был присвоен
+        api_key = getattr(identity.user, "api_key", None)
+        # формируем безопасные поля для фронта (без hash)
+        safe_user = {k: v for k, v in params.items() if k != "hash"}
+        # путь к локальному аватару, если он уже скачан
+        avatar_url = request.build_absolute_uri(identity.avatar.url) if identity.avatar else None
+
+        return Response(
+            {"ok": True, "user": safe_user, "api_key": api_key, "avatar": avatar_url},
+            status=status.HTTP_200_OK,
+        )
