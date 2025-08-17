@@ -45,13 +45,11 @@ class TelegramLoginVerifyView(APIView):
 
     def post(self, request):
         search = request.data.get("search", "")
+        source = request.data.get("source", "widget")
 
         logger.debug("== TelegramLoginVerifyView ==")
-        logger.debug("source=%s", request.data.get("source"))
+        logger.debug("source=%s", source)
         logger.debug("raw search=%s", search)
-
-
-        source = request.data.get("source", "widget")
 
         if not isinstance(search, str):
             return Response({"ok": False, "error": "missing search"}, status=status.HTTP_400_BAD_REQUEST)
@@ -59,8 +57,23 @@ class TelegramLoginVerifyView(APIView):
         if search.startswith("?"):
             search = search[1:]
 
+        from urllib.parse import unquote
+        search = unquote(search)
+
         params = dict(parse_qsl(search, keep_blank_values=True))
+
+        # 🔹 MiniApp: initData содержит поле user в JSON
+        if source == "miniapp" and "user" in params:
+            import json
+            try:
+                user_data = json.loads(params["user"])
+                for k, v in user_data.items():
+                    params[str(k)] = str(v)
+            except Exception as e:
+                logger.warning("Failed to parse user JSON from miniapp initData: %s", e)
+
         logger.debug("params=%s", params)
+
         bot_token = settings.TELEGRAM_BOT_TOKEN
 
         if source == "miniapp":
@@ -117,11 +130,11 @@ class TelegramLoginVerifyView(APIView):
                 if response.status_code == 200 and response.content:
                     filename = f"avatars/tg_{tg_id}.jpg"
                     identity.avatar.save(filename, ContentFile(response.content), save=True)
-                    logger.info(f"Saved Telegram avatar for {tg_id}")
+                    logger.info(f"Saved Telegram avatar for %s", tg_id)
                 else:
-                    logger.warning(f"Empty/failed response when fetching avatar for {tg_id}")
+                    logger.warning("Empty/failed response when fetching avatar for %s", tg_id)
             except Exception as e:
-                logger.warning(f"Failed to fetch Telegram avatar for {tg_id}: {e}")
+                logger.warning("Failed to fetch Telegram avatar for %s: %s", tg_id, e)
 
         identity.save()
 
@@ -142,3 +155,4 @@ class TelegramLoginVerifyView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
