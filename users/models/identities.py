@@ -20,4 +20,4 @@ class ExternalIdentity(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.provider}:{self.external_id} → {self.user_id}"
+        return f"{self.provider}:{self.external_id} → {self.user.username}"
