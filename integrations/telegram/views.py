@@ -38,60 +38,91 @@ class TelegramSendMessageView(APIView):
 
 
 class TelegramLoginVerifyView(APIView):
-    """Verify Telegram login (both Widget and MiniApp)."""
+    """Verify Telegram login (supports both Widget and MiniApp)."""
     authentication_classes = []
     permission_classes = []
     throttle_classes = []
 
     def post(self, request):
-        search = request.data.get("search", "")
         source = request.data.get("source", "widget")
-
-        logger.debug("== TelegramLoginVerifyView ==")
-        logger.debug("source=%s", source)
-        logger.debug("raw search=%s", search)
-
-        if not isinstance(search, str):
-            return Response({"ok": False, "error": "missing search"}, status=status.HTTP_400_BAD_REQUEST)
-
-        if search.startswith("?"):
-            search = search[1:]
-
-        from urllib.parse import unquote
-        search = unquote(search)
-
-        params = dict(parse_qsl(search, keep_blank_values=True))
-
-        # 🔹 MiniApp: initData содержит поле user в JSON
-        if source == "miniapp" and "user" in params:
-            import json
-            try:
-                user_data = json.loads(params["user"])
-                for k, v in user_data.items():
-                    params[str(k)] = str(v)
-            except Exception as e:
-                logger.warning("Failed to parse user JSON from miniapp initData: %s", e)
-
-        logger.debug("params=%s", params)
-
         bot_token = settings.TELEGRAM_BOT_TOKEN
 
+        print("\n==============================")
+        print("== TelegramLoginVerifyView ==")
+        print("Source:", source)
+
+        raw = request.data.get("raw")
+        unsafe = request.data.get("unsafe")
+        print("raw =", raw)
+        print("unsafe =", unsafe)
+
+        params = {}
+
+        # ---------------------------------
+        # MiniApp branch
+        # ---------------------------------
         if source == "miniapp":
-            valid = validate_miniapp(params, bot_token)
+            raw = request.data.get("raw", "")
+            if not raw:
+                print("❌ Missing raw param for miniapp")
+                return Response({"ok": False, "error": "missing raw"}, status=status.HTTP_400_BAD_REQUEST)
+
+            from urllib.parse import parse_qsl
+            params_initial = dict(parse_qsl(raw, keep_blank_values=True))
+            print("miniapp.params.initial =", params_initial)
+
+            # Validate ONLY initial params (user still JSON string!)
+            valid = validate_miniapp(params_initial, bot_token)
+            print("validation_result (miniapp initial) =", valid)
+
+            if not valid:
+                return Response({"ok": False, "error": "invalid signature"}, status=status.HTTP_401_UNAUTHORIZED)
+
+            # Expand with unsafe.user only AFTER validation
+            params = params_initial.copy()
+            if isinstance(unsafe, dict) and "user" in unsafe:
+                for k, v in unsafe["user"].items():
+                    params[str(k)] = str(v)
+            print("miniapp.params.with_user =", params)
+
+        # ---------------------------------
+        # Widget branch
+        # ---------------------------------
         else:
+            search = request.data.get("search", "")
+            if search.startswith("?"):
+                search = search[1:]
+
+            from urllib.parse import parse_qsl, unquote
+            search = unquote(search)
+            print("widget.search =", search)
+
+            params = dict(parse_qsl(search, keep_blank_values=True))
+            print("widget.params =", params)
+
             valid = validate_login_widget(params, bot_token)
+            print("validation_result (widget) =", valid)
 
-        if not valid:
-            return Response({"ok": False, "error": "invalid signature"}, status=status.HTTP_401_UNAUTHORIZED)
+            if not valid:
+                return Response({"ok": False, "error": "invalid signature"}, status=status.HTTP_401_UNAUTHORIZED)
 
+        print("final.params =", params)
+        print("BOT_TOKEN (prefix) =", settings.TELEGRAM_BOT_TOKEN[:10])
+
+        # ---------------------------------
+        # User / identity handling
+        # ---------------------------------
         UserModel = get_user_model()
         tg_id = str(params.get("id", ""))
         username = params.get("username")
         photo_url = params.get("photo_url")
 
+        print(f"Looking up Telegram user {username} ({tg_id})")
+
         try:
             identity = ExternalIdentity.objects.get(provider="telegram", external_id=tg_id)
             user = identity.user
+            print(f"✅ Existing Telegram user found: {username} ({tg_id})")
         except ExternalIdentity.DoesNotExist:
             user = UserModel.objects.create_user(
                 username=f"tg_{tg_id}",
@@ -104,6 +135,7 @@ class TelegramLoginVerifyView(APIView):
                 user=user,
                 raw=params,
             )
+            print(f"🆕 Registered new Telegram user: {username} ({tg_id})")
 
         # --- sync fields ---
         identity.username = username or identity.username
@@ -126,15 +158,16 @@ class TelegramLoginVerifyView(APIView):
 
         if needs_download and identity.photo_url:
             try:
+                print(f"Fetching avatar from {identity.photo_url}")
                 response = httpx.get(identity.photo_url, timeout=10, follow_redirects=True)
                 if response.status_code == 200 and response.content:
                     filename = f"avatars/tg_{tg_id}.jpg"
                     identity.avatar.save(filename, ContentFile(response.content), save=True)
-                    logger.info(f"Saved Telegram avatar for %s", tg_id)
+                    print(f"✅ Saved Telegram avatar for {tg_id}")
                 else:
-                    logger.warning("Empty/failed response when fetching avatar for %s", tg_id)
+                    print(f"⚠️ Empty/failed response when fetching avatar for {tg_id}")
             except Exception as e:
-                logger.warning("Failed to fetch Telegram avatar for %s: %s", tg_id, e)
+                print(f"❌ Failed to fetch Telegram avatar for {tg_id}: {e}")
 
         identity.save()
 
@@ -142,9 +175,13 @@ class TelegramLoginVerifyView(APIView):
         if not getattr(user, "api_key", None):
             user.api_key = UserModel.objects.make_random_password(length=40)
             user.save()
+            print(f"Generated new API key for {username} ({tg_id})")
 
-        safe_user = {k: v for k, v in params.items() if k != "hash"}
+        safe_user = {k: v for k, v in params.items() if k not in ("hash", "signature")}
         avatar_url = request.build_absolute_uri(identity.avatar.url) if identity.avatar else None
+
+        print(f"🎉 Telegram auth SUCCESSFUL: {username} ({tg_id})")
+        print("==============================\n")
 
         return Response(
             {
@@ -155,4 +192,10 @@ class TelegramLoginVerifyView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+
+
+
+
 
