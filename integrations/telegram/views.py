@@ -1,7 +1,7 @@
 import os
 import hmac
 import hashlib
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, unquote
 import logging
 import httpx
 
@@ -85,26 +85,6 @@ class TelegramLoginVerifyView(APIView):
                     params[str(k)] = str(v)
             print("miniapp.params.with_user =", params)
 
-        # ---------------------------------
-        # Widget branch
-        # ---------------------------------
-        else:
-            search = request.data.get("search", "")
-            if search.startswith("?"):
-                search = search[1:]
-
-            from urllib.parse import parse_qsl, unquote
-            search = unquote(search)
-            print("widget.search =", search)
-
-            params = dict(parse_qsl(search, keep_blank_values=True))
-            print("widget.params =", params)
-
-            valid = validate_login_widget(params, bot_token)
-            print("validation_result (widget) =", valid)
-
-            if not valid:
-                return Response({"ok": False, "error": "invalid signature"}, status=status.HTTP_401_UNAUTHORIZED)
 
         print("final.params =", params)
         print("BOT_TOKEN (prefix) =", settings.TELEGRAM_BOT_TOKEN[:10])
@@ -193,7 +173,89 @@ class TelegramLoginVerifyView(APIView):
             status=status.HTTP_200_OK,
         )
 
+class TelegramWidgetLoginVerifyView(APIView):
+    """Verify Telegram login for Widget (GET with query string)."""
+    authentication_classes = []
+    permission_classes = []
+    throttle_classes = []
 
+    def get(self, request):
+        bot_token = settings.TELEGRAM_BOT_TOKEN
+        search = request.META.get("QUERY_STRING", "")
+        search = unquote(search)
+        params = dict(parse_qsl(search, keep_blank_values=True))
+
+        if not validate_login_widget(params, bot_token):
+            return Response({"ok": False, "error": "invalid signature"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        return self._finalize(request, params)
+
+
+    # --- shared logic ---
+    def _finalize(self, request, params: dict):
+        UserModel = get_user_model()
+        tg_id = str(params.get("id", ""))
+        username = params.get("username")
+        photo_url = params.get("photo_url")
+
+        # find or create user
+        try:
+            identity = ExternalIdentity.objects.get(provider="telegram", external_id=tg_id)
+            user = identity.user
+        except ExternalIdentity.DoesNotExist:
+            user = UserModel.objects.create_user(
+                username=f"tg_{tg_id}",
+                password=UserModel.objects.make_random_password(),
+                email=None,
+            )
+            identity = ExternalIdentity.objects.create(
+                provider="telegram",
+                external_id=tg_id,
+                user=user,
+                raw=params,
+            )
+
+        # sync identity fields
+        identity.username = username or identity.username
+        identity.raw = params
+
+        # download avatar if needed
+        needs_download = False
+        if photo_url and photo_url != identity.photo_url:
+            identity.photo_url = photo_url
+            needs_download = True
+        try:
+            if not identity.avatar or not identity.avatar.name:
+                needs_download = True
+            else:
+                if not os.path.exists(identity.avatar.path):
+                    needs_download = True
+        except Exception:
+            needs_download = True
+
+        if needs_download and identity.photo_url:
+            try:
+                response = httpx.get(identity.photo_url, timeout=10, follow_redirects=True)
+                if response.status_code == 200 and response.content:
+                    filename = f"avatars/tg_{tg_id}.jpg"
+                    identity.avatar.save(filename, ContentFile(response.content), save=True)
+            except Exception as e:
+                print(f"❌ Failed to fetch Telegram avatar for {tg_id}: {e}")
+
+        identity.save()
+
+        # ensure api_key
+        if not getattr(user, "api_key", None):
+            user.api_key = UserModel.objects.make_random_password(length=40)
+            user.save()
+
+        safe_user = {k: v for k, v in params.items() if k not in ("hash", "signature")}
+        avatar_url = request.build_absolute_uri(identity.avatar.url) if identity.avatar else None
+
+        return Response(
+            {"ok": True, "user": safe_user, "api_key": user.api_key, "avatar": avatar_url},
+            status=status.HTTP_200_OK,
+        )
 
 
 
