@@ -25,12 +25,39 @@ This makes the platform sustainable while supporting creativity.
 - **Posts** (generation, moderation, scheduling, publishing).  
 - Django Admin for management.  
 
+## 🔑 Telegram Authentication
+
+PolyVoice supports **two independent login flows** for Telegram:
+
+- **MiniApp Login**  
+  - Endpoint: `POST /api/telegram/auth/`  
+  - Used when the app runs inside the Telegram MiniApp (`Telegram.WebApp`).  
+  - Expects `raw` + `unsafe` params and validates via MiniApp signature.
+
+- **Widget Login**  
+  - Endpoint: `GET /api/telegram/widget-auth/`  
+  - Used when the user logs in through the Telegram Login Widget on the web.  
+  - Expects query string params (`id, first_name, username, hash, ...`) and validates via HMAC.
+
+Both flows create or update a `User` and `ExternalIdentity` and return:
+```json
+{
+  "ok": true,
+  "user": { ... },
+  "api_key": "xxxx",
+  "avatar": "https://..."
+}
+```
+
 ## 🛠 Tech Stack
 - **Backend**: Django + DRF  
 - **Database**: PostgreSQL  
 - **Queues**: Celery + Redis (for tasks & scheduling)  
 - **AI**: OpenAI GPT (multi-provider planned)  
 - **Integrations**: Telegram API (first channel, more to follow)  
+
+
+
 
 ## 🏗 Architecture
 
@@ -41,3 +68,4 @@ flowchart LR
     B -->|"Stores Data"| D["PostgreSQL"]
     B -->|"Queue Tasks"| E["Celery + Redis"]
     E -->|"Publishes"| F["Channels: Telegram, X, LinkedIn, ..."]
+
